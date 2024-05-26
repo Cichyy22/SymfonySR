@@ -26,6 +26,7 @@ class TeacherClassesController extends AbstractController
         $responseData[] = [
             'id' => $class->getId(),
             'name' => $class->getName(),
+            'active' => $class->isActive(),
         ];
     }
     
@@ -50,6 +51,7 @@ class TeacherClassesController extends AbstractController
             'id' => $class->getId(),
             'name' => $class->getName(),
             'student_ids' => $studentIds,
+            'active' => $class->isActive(),
         ];
     
         return $this->json($responseData, 200);
@@ -57,25 +59,33 @@ class TeacherClassesController extends AbstractController
 
     #[Route('/api/teachers/classes', name: 'create_class', methods: ['POST'])]
     public function createClass(Request $request, EntityManagerInterface $em, UserRepository $userRepository): JsonResponse
-    {
-        $data = json_decode($request->getContent(), true);
-        $teacher = $userRepository->find($data['teacher_id']);
+{
+    $data = json_decode($request->getContent(), true);
+    $teacher = $userRepository->find($data['teacher_id']);
 
-        if (!$teacher || $teacher->getStatus() !== 1) {
-            return $this->json(['error' => 'Invalid teacher'], Response::HTTP_BAD_REQUEST);
-        }
-
-        $class = new Classes();
-        $class->setName($data['name'])
-            ->setTeacherId($teacher)
-            ->setActive(true)
-            ->setCapacity($data['capacity']);
-
-        $em->persist($class);
-        $em->flush();
-
-        return $this->json($class, Response::HTTP_CREATED);
+    if (!$teacher || $teacher->getStatus() !== 1) {
+        return $this->json(['error' => 'Invalid teacher'], Response::HTTP_BAD_REQUEST);
     }
+
+    $class = new Classes();
+    $class->setName($data['name'])
+        ->setTeacherId($teacher)
+        ->setActive(true)
+        ->setCapacity($data['capacity']);
+
+    $em->persist($class);
+    $em->flush();
+
+    $response = [
+        'id' => $class->getId(),
+        'name' => $class->getName(),
+        'teacher_id' => $teacher->getId(),
+        'active' => $class->isActive(),
+        'capacity' => $class->getCapacity(),
+    ];
+
+    return $this->json($response, Response::HTTP_CREATED);
+}
 
     #[Route('/api/teachers/classes/{id}', name: 'update_class', methods: ['PUT'])]
     public function updateClass(int $id, Request $request, ClassesRepository $classesRepository, EntityManagerInterface $em): JsonResponse
@@ -93,7 +103,14 @@ class TeacherClassesController extends AbstractController
 
         $em->flush();
 
-        return $this->json($class);
+        $response = [
+            'id' => $class->getId(),
+            'name' => $class->getName(),
+            'capacity' => $class->getCapacity(),
+            'active' => $class->isActive(),
+        ];
+    
+        return $this->json($response);
     }
 
     #[Route('/api/teachers/classes/{id}', name: 'delete_class', methods: ['DELETE'])]
@@ -159,25 +176,73 @@ public function getStudents(int $id, ClassesRepository $classesRepository): Json
     return $this->json($formattedFinalGrades, 200);
 }
 
-    #[Route('/api/teachers/classes/{classId}/students/{studentId}/grade', name: 'add_final_grade', methods: ['POST'])]
-    public function addFinalGrade(int $classId, int $studentId, Request $request, EntityManagerInterface $em, ClassesRepository $classesRepository, UserRepository $userRepository): JsonResponse
-    {
-        $class = $classesRepository->find($classId);
-        $student = $userRepository->find($studentId);
+#[Route('/api/teachers/classes/{classId}/grade', name: 'add_final_grade', methods: ['POST'])]
+#[Route('/api/teachers/classes/{classId}/grade', name: 'add_final_grade', methods: ['POST'])]
+public function addFinalGrade(int $classId, Request $request, EntityManagerInterface $em, ClassesRepository $classesRepository, UserRepository $userRepository): JsonResponse
+{
+    $class = $classesRepository->find($classId);
 
-        if (!$class || !$student) {
-            return $this->json(['error' => 'Class or student not found'], Response::HTTP_NOT_FOUND);
+    if (!$class) {
+        return $this->json(['error' => 'Class not found'], Response::HTTP_NOT_FOUND);
+    }
+
+    $data = json_decode($request->getContent(), true);
+    $studentId = $data['student_id'];
+    $gradeValue = $data['grade'];
+
+    $student = $userRepository->find($studentId);
+
+    if (!$student) {
+        return $this->json(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
+    }
+
+    // Check if the student is enrolled in the class
+    if (!$class->getStudentsId()->contains($student)) {
+        return $this->json(['error' => 'Student is not enrolled in this class'], Response::HTTP_BAD_REQUEST);
+    }
+
+    // Check if the student's status is 0
+    if ($student->getStatus() !== 0) {
+        return $this->json(['error' => 'Student status is not 0'], Response::HTTP_BAD_REQUEST);
+    }
+
+    $grade = new FinalGrade();
+    $grade->setClassId($class)
+        ->setStudentId($student)
+        ->setGrade($gradeValue);
+
+    $em->persist($grade);
+    $em->flush();
+
+    return $this->json([
+        'student_id' => $student->getId(),
+        'grade' => $grade->getGrade()
+    ], Response::HTTP_CREATED);
+}
+    #[Route('/api/teachers/classes/{id}/active', name: 'update_class_active', methods: ['PUT'])]
+    public function updateClassActive(int $id, Request $request, ClassesRepository $classesRepository, EntityManagerInterface $em): JsonResponse
+    {
+        $class = $classesRepository->find($id);
+
+        if (!$class) {
+            return $this->json(['error' => 'Class not found'], Response::HTTP_NOT_FOUND);
         }
 
         $data = json_decode($request->getContent(), true);
-        $grade = new FinalGrade();
-        $grade->setClassId($class)
-            ->setStudentId($student)
-            ->setGrade($data['grade']);
+        if (isset($data['active'])) {
+            $class->setActive($data['active']);
+        } else {
+            return $this->json(['error' => 'Active status not provided'], Response::HTTP_BAD_REQUEST);
+        }
 
-        $em->persist($grade);
         $em->flush();
 
-        return $this->json($grade, Response::HTTP_CREATED);
+        $response = [
+            'id' => $class->getId(),
+            'name' => $class->getName(),
+            'active' => $class->isActive(),
+        ];
+    
+        return $this->json($response);
     }
 }
