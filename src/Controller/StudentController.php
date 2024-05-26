@@ -17,9 +17,6 @@ use Symfony\Component\Routing\Annotation\Route;
 
 class StudentController extends AbstractController
 {
-    /**
-     * @Route("/api/students/register", name="register_student", methods={"POST"})
-     */
     #[Route('/api/students/register', name: 'register_student', methods: ['POST'])]
     public function registerStudent(Request $request, EntityManagerInterface $entityManager, ClassesRepository $classesRepository, UserRepository $userRepository): JsonResponse
 {
@@ -57,9 +54,6 @@ class StudentController extends AbstractController
     return $this->json(['message' => 'Student registered for class successfully'], Response::HTTP_CREATED);
 }
 
-    /**
-     * @Route("/api/students/unregister/{student_id}/{class_id}", name="unregister_student", methods={"DELETE"})
-     */
     #[Route('/api/students/unregister/{student_id}/{class_id}', name: 'unregister_student', methods: ['DELETE'])]
     public function unregisterStudent(int $student_id, int $class_id, EntityManagerInterface $entityManager, ClassesRepository $classesRepository, UserRepository $userRepository): JsonResponse
     {
@@ -77,9 +71,6 @@ class StudentController extends AbstractController
         return $this->json(['message' => 'Student unregistered from class successfully'], Response::HTTP_OK);
     }
 
-    /**
-     * @Route("/api/students/finalgrade/{student_id}/{class_id}", name="get_final_grade", methods={"GET"})
-     */
     #[Route('/api/students/finalgrades/{student_id}', name: 'get_final_grades_for_student', methods: ['GET'])]
     public function getFinalGradesForStudent(int $student_id, EntityManagerInterface $entityManager): JsonResponse
     {
